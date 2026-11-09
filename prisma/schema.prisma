@@ -33,6 +33,7 @@ model User {
 
   refreshTokens RefreshToken[]
   projects      Project[]
+  tasks         Task[]
 
   @@index([status])
   @@map("users")
@@ -65,8 +66,61 @@ model Project {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
 
   @@index([userId])
   @@map("projects")
+}
+
+enum TaskStatus {
+  todo
+  done
+}
+
+enum TaskPriority {
+  low
+  normal
+  high
+}
+
+enum ReminderStatus {
+  scheduled
+  sending
+  sent
+  failed
+  canceled
+}
+
+model Task {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  projectId   String?      @map("project_id") @db.Uuid
+  title       String       @db.VarChar(200)
+  date        DateTime?    @db.Date
+  time        String?      @db.VarChar(5)
+  priority    TaskPriority @default(normal)
+  status      TaskStatus   @default(todo)
+  position    Int          @default(0)
+  isCurrent   Boolean      @default(false) @map("is_current")
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  reminderAt            DateTime?       @map("reminder_at")
+  reminderTimezone      String?         @map("reminder_timezone") @db.VarChar(64)
+  reminderStatus        ReminderStatus? @map("reminder_status")
+  reminderNextAttemptAt DateTime?       @map("reminder_next_attempt_at")
+  reminderClaimedAt     DateTime?       @map("reminder_claimed_at")
+  reminderAttempts      Int             @default(0) @map("reminder_attempts")
+  reminderSentAt        DateTime?       @map("reminder_sent_at")
+  reminderLastError     String?         @map("reminder_last_error") @db.VarChar(500)
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([projectId])
+  @@index([reminderStatus, reminderNextAttemptAt])
+  @@map("tasks")
 }

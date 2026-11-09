@@ -7,6 +7,8 @@ import { pingDB, disconnectDB } from './src/config/prisma.js';
 import projectRoutes from './src/projects/routes/projectRoutes.js';
 import authRoutes from './src/auth/routes/authRoutes.js';
 import userRoutes from './src/users/routes/userRoutes.js';
+import taskRoutes from './src/tasks/routes/taskRoutes.js';
+import { startReminderWorker } from './src/reminders/reminderWorker.js';
 import { deleteExpiredTokens } from './src/auth/services/tokenService.js';
 
 dotenv.config();
@@ -45,6 +47,7 @@ app.use(express.json({ limit: '256kb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -78,6 +81,8 @@ const cleanupTokens = () =>
     console.error('[auth] token cleanup failed:', error.message || error),
   );
 
+let stopReminderWorker = () => {};
+
 const server = app.listen(PORT, () => {
   console.log(`Planimax API running on port ${PORT}`);
   if (!String(process.env.JWT_SECRET || '').trim()) {
@@ -85,10 +90,12 @@ const server = app.listen(PORT, () => {
   }
   cleanupTokens();
   setInterval(cleanupTokens, TOKEN_CLEANUP_INTERVAL_MS).unref();
+  stopReminderWorker = startReminderWorker();
 });
 
 const shutdown = (signal) => () => {
   console.log(`${signal} received, shutting down`);
+  stopReminderWorker();
   server.close(async () => {
     await disconnectDB();
     process.exit(0);
