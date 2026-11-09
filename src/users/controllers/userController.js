@@ -1,5 +1,6 @@
 import { validationResult } from 'express-validator';
 import {
+  deleteUser,
   findById,
   listUsers,
   toPublicUser,
@@ -74,5 +75,23 @@ export const patchUserRole = async (req, res) => {
     return res.json({ success: true, data: toPublicUser(user) });
   } catch (error) {
     return serverError(res, 'role update failed', error, 'Failed to update user role');
+  }
+};
+
+export const removeUser = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return badRequest(res, errors);
+
+  if (req.params.id === req.user.id) {
+    return conflict(res, 'You cannot delete your own account');
+  }
+
+  try {
+    const deleted = await deleteUser(req.params.id);
+    if (!deleted) return notFound(res);
+
+    return res.json({ success: true, data: { id: deleted.id } });
+  } catch (error) {
+    return serverError(res, 'delete failed', error, 'Failed to delete user');
   }
 };

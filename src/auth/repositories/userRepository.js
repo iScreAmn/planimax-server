@@ -66,3 +66,12 @@ const updateById = async (id, data) => {
 export const updateStatus = (id, status) => updateById(id, { status, reviewedAt: new Date() });
 
 export const updateRole = (id, role) => updateById(id, { role });
+
+export const deleteUser = async (id) => {
+  try {
+    return await prisma.user.delete({ where: { id } });
+  } catch (error) {
+    if (error.code === 'P2025') return null;
+    throw error;
+  }
+};

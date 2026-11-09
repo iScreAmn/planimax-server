@@ -14,3 +14,5 @@ export const updateRoleRules = [
   userIdRule,
   body('role').isIn(USER_ROLES).withMessage('Role must be user or admin'),
 ];
+
+export const deleteUserRules = [userIdRule];
