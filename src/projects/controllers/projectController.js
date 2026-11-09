@@ -23,7 +23,7 @@ const serverError = (res, label, error, message) => {
 
 export const getProjects = async (req, res) => {
   try {
-    return res.json({ success: true, data: await listProjects() });
+    return res.json({ success: true, data: await listProjects(req.user.id) });
   } catch (error) {
     return serverError(res, 'не удалось получить список', error, 'Failed to load projects');
   }
@@ -34,7 +34,7 @@ export const getProject = async (req, res) => {
   if (!errors.isEmpty()) return badRequest(res, errors);
 
   try {
-    const project = await findProject(req.params.id);
+    const project = await findProject(req.user.id, req.params.id);
     if (!project) return notFound(res);
     return res.json({ success: true, data: project });
   } catch (error) {
@@ -47,7 +47,7 @@ export const postProject = async (req, res) => {
   if (!errors.isEmpty()) return badRequest(res, errors);
 
   try {
-    const project = await createProject({
+    const project = await createProject(req.user.id, {
       name: req.body.name.trim(),
       color: req.body.color.toLowerCase(),
       inPlanner: req.body.inPlanner,
@@ -64,7 +64,7 @@ export const patchProject = async (req, res) => {
 
   const { name, color, notes, inPlanner } = req.body;
   try {
-    const project = await updateProject(req.params.id, {
+    const project = await updateProject(req.user.id, req.params.id, {
       name: typeof name === 'string' ? name.trim() : undefined,
       color: typeof color === 'string' ? color.toLowerCase() : undefined,
       notes,
@@ -82,7 +82,7 @@ export const removeProject = async (req, res) => {
   if (!errors.isEmpty()) return badRequest(res, errors);
 
   try {
-    const deleted = await deleteProject(req.params.id);
+    const deleted = await deleteProject(req.user.id, req.params.id);
     if (!deleted) return notFound(res);
     return res.json({ success: true, data: { id: req.params.id } });
   } catch (error) {

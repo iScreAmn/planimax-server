@@ -10,38 +10,34 @@ const toPublic = (project) => ({
   updatedAt: project.updatedAt,
 });
 
-export const listProjects = async () =>
-  (await prisma.project.findMany({ orderBy: { createdAt: 'asc' } })).map(toPublic);
+export const listProjects = async (userId) =>
+  (await prisma.project.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } })).map(
+    toPublic,
+  );
 
-export const findProject = async (id) => {
-  const project = await prisma.project.findUnique({ where: { id } });
+export const findProject = async (userId, id) => {
+  const project = await prisma.project.findFirst({ where: { id, userId } });
   return project ? toPublic(project) : null;
 };
 
-export const createProject = async ({ name, color, inPlanner }) =>
-  toPublic(await prisma.project.create({ data: { name, color, inPlanner: Boolean(inPlanner) } }));
+export const createProject = async (userId, { name, color, inPlanner }) =>
+  toPublic(
+    await prisma.project.create({ data: { userId, name, color, inPlanner: Boolean(inPlanner) } }),
+  );
 
-export const updateProject = async (id, { name, color, notes, inPlanner }) => {
+export const updateProject = async (userId, id, { name, color, notes, inPlanner }) => {
   const data = {};
   if (name !== undefined) data.name = name;
   if (color !== undefined) data.color = color;
   if (notes !== undefined) data.notes = notes;
   if (inPlanner !== undefined) data.inPlanner = inPlanner;
 
-  try {
-    return toPublic(await prisma.project.update({ where: { id }, data }));
-  } catch (error) {
-    if (error.code === 'P2025') return null;
-    throw error;
-  }
+  const { count } = await prisma.project.updateMany({ where: { id, userId }, data });
+  if (count === 0) return null;
+  return findProject(userId, id);
 };
 
-export const deleteProject = async (id) => {
-  try {
-    await prisma.project.delete({ where: { id } });
-    return true;
-  } catch (error) {
-    if (error.code === 'P2025') return false;
-    throw error;
-  }
+export const deleteProject = async (userId, id) => {
+  const { count } = await prisma.project.deleteMany({ where: { id, userId } });
+  return count > 0;
 };

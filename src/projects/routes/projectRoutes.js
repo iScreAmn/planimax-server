@@ -11,8 +11,11 @@ import {
   updateProjectRules,
   projectIdRules,
 } from '../validators/projectValidator.js';
+import { requireAuth } from '../../auth/middleware/requireAuth.js';
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 router.get('/', getProjects);
 router.post('/', createProjectRules, postProject);

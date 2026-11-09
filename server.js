@@ -1,9 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { pingDB, disconnectDB } from './src/config/prisma.js';
 import projectRoutes from './src/projects/routes/projectRoutes.js';
+import authRoutes from './src/auth/routes/authRoutes.js';
+import userRoutes from './src/users/routes/userRoutes.js';
+import { deleteExpiredTokens } from './src/auth/services/tokenService.js';
 
 dotenv.config();
 
@@ -35,8 +39,11 @@ app.use(
 );
 
 app.use(helmet());
+app.use(cookieParser());
 app.use(express.json({ limit: '256kb' }));
 
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 
 app.get('/api/health', async (req, res) => {
@@ -64,8 +71,20 @@ app.use((err, req, res, next) => {
   });
 });
 
+const TOKEN_CLEANUP_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+const cleanupTokens = () =>
+  deleteExpiredTokens().catch((error) =>
+    console.error('[auth] token cleanup failed:', error.message || error),
+  );
+
 const server = app.listen(PORT, () => {
   console.log(`Planimax API running on port ${PORT}`);
+  if (!String(process.env.JWT_SECRET || '').trim()) {
+    console.warn('[auth] JWT_SECRET is not set: sign-in will fail');
+  }
+  cleanupTokens();
+  setInterval(cleanupTokens, TOKEN_CLEANUP_INTERVAL_MS).unref();
 });
 
 const shutdown = (signal) => () => {
