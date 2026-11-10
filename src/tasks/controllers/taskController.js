@@ -6,6 +6,7 @@ import {
   findTask,
   listTasksForDay,
   reorderTasks,
+  summarizeTasks,
   updateTask,
 } from '../taskRepository.js';
 
@@ -45,6 +46,17 @@ export const getTasks = async (req, res) => {
     return res.json({ success: true, data: await listTasksForDay(req.user.id, req.query.date) });
   } catch (error) {
     return handleError(res, 'list failed', error, 'Failed to load tasks');
+  }
+};
+
+export const getTaskSummary = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return badRequest(res, errors);
+
+  try {
+    return res.json({ success: true, data: await summarizeTasks(req.user.id, req.query.from, req.query.to) });
+  } catch (error) {
+    return handleError(res, 'summary failed', error, 'Failed to load the task summary');
   }
 };
 

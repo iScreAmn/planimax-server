@@ -150,6 +150,24 @@ export const listTasksForDay = async (userId, date) => {
   return tasks.map(toPublicTask);
 };
 
+export const summarizeTasks = async (userId, from, to) => {
+  const groups = await prisma.task.groupBy({
+    by: ['date', 'status'],
+    where: { userId, date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
+    _count: { _all: true },
+  });
+
+  const days = new Map();
+  for (const group of groups) {
+    const date = dbToDateKey(group.date);
+    const day = days.get(date) ?? { date, total: 0, done: 0 };
+    day.total += group._count._all;
+    if (group.status === 'done') day.done += group._count._all;
+    days.set(date, day);
+  }
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+};
+
 export const findTask = async (userId, id) => {
   const task = await prisma.task.findFirst({ where: { id, userId }, include: { project: projectSelect } });
   return task ? toPublicTask(task) : null;

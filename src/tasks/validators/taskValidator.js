@@ -11,6 +11,21 @@ export const listTasksRules = [
   query('date').custom(isValidDateKey).withMessage('Date must be YYYY-MM-DD'),
 ];
 
+const SUMMARY_MAX_DAYS = 62;
+
+export const summaryRules = [
+  query('from').custom(isValidDateKey).withMessage('from must be YYYY-MM-DD'),
+  query('to')
+    .custom(isValidDateKey)
+    .withMessage('to must be YYYY-MM-DD')
+    .custom((to, { req }) => {
+      const days = (Date.parse(to) - Date.parse(req.query.from)) / 86_400_000;
+      if (!(days >= 0)) throw new Error('to must not be before from');
+      if (days > SUMMARY_MAX_DAYS) throw new Error(`The range is longer than ${SUMMARY_MAX_DAYS} days`);
+      return true;
+    }),
+];
+
 const titleRule = () =>
   body('title')
     .isString()
