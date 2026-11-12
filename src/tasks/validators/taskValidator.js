@@ -4,6 +4,7 @@ import { isValidDateKey, isValidTime, isValidTimeZone } from '../timezone.js';
 
 export const TITLE_MAX_LENGTH = 200;
 const REORDER_MAX_IDS = 500;
+const CHANGED_AT_MAX_SKEW_MS = 5 * 60 * 1000;
 
 export const taskIdRules = [param('id').isUUID().withMessage('Invalid id')];
 
@@ -54,7 +55,16 @@ const reminderRule = () =>
       return true;
     });
 
+const changedAtRule = () =>
+  body('changedAt')
+    .optional()
+    .isISO8601({ strict: true, strictSeparator: true })
+    .withMessage('changedAt must be an ISO date-time')
+    .custom((value) => Date.parse(value) <= Date.now() + CHANGED_AT_MAX_SKEW_MS)
+    .withMessage('changedAt is in the future');
+
 const sharedRules = () => [
+  changedAtRule(),
   nullable('projectId', (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v), 'Invalid project'),
   nullable('date', isValidDateKey, 'Date must be YYYY-MM-DD'),
   nullable('time', isValidTime, 'Time must be HH:MM'),
@@ -63,7 +73,11 @@ const sharedRules = () => [
   reminderRule(),
 ];
 
-export const createTaskRules = [titleRule(), ...sharedRules()];
+export const createTaskRules = [
+  body('id').optional().isUUID().withMessage('Invalid id'),
+  titleRule(),
+  ...sharedRules(),
+];
 
 export const updateTaskRules = [
   ...taskIdRules,

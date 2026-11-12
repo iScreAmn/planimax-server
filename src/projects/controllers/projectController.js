@@ -1,5 +1,6 @@
 import { validationResult } from 'express-validator';
 import {
+  ProjectError,
   listProjects,
   findProject,
   createProject,
@@ -17,6 +18,9 @@ const badRequest = (res, errors) =>
 const notFound = (res) => res.status(404).json({ success: false, message: 'Project not found' });
 
 const serverError = (res, label, error, message) => {
+  if (error instanceof ProjectError) {
+    return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+  }
   console.error(`[projects] ${label}:`, error.message || error);
   return res.status(500).json({ success: false, message });
 };
@@ -47,12 +51,13 @@ export const postProject = async (req, res) => {
   if (!errors.isEmpty()) return badRequest(res, errors);
 
   try {
-    const project = await createProject(req.user.id, {
+    const { project, created } = await createProject(req.user.id, {
+      id: req.body.id,
       name: req.body.name.trim(),
       color: req.body.color.toLowerCase(),
       inPlanner: req.body.inPlanner,
     });
-    return res.status(201).json({ success: true, data: project });
+    return res.status(created ? 201 : 200).json({ success: true, data: project });
   } catch (error) {
     return serverError(res, 'не удалось создать проект', error, 'Failed to create project');
   }
@@ -62,22 +67,16 @@ export const patchProject = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return badRequest(res, errors);
 
-  const { name, color, notes, inPlanner, expectedUpdatedAt } = req.body;
+  const { name, color, notes, inPlanner, expectedUpdatedAt, expectedNotesVersion } = req.body;
   try {
-    const { project, conflict } = await updateProject(req.user.id, req.params.id, {
+    const project = await updateProject(req.user.id, req.params.id, {
       name: typeof name === 'string' ? name.trim() : undefined,
       color: typeof color === 'string' ? color.toLowerCase() : undefined,
       notes,
       inPlanner,
       expectedUpdatedAt,
+      expectedNotesVersion,
     });
-    if (conflict) {
-      return res.status(409).json({
-        success: false,
-        code: 'PROJECT_NOTES_CONFLICT',
-        message: 'Project changed since these notes were loaded',
-      });
-    }
     if (!project) return notFound(res);
     return res.json({ success: true, data: project });
   } catch (error) {
@@ -91,8 +90,7 @@ export const removeProject = async (req, res) => {
 
   try {
     const deleted = await deleteProject(req.user.id, req.params.id);
-    if (!deleted) return notFound(res);
-    return res.json({ success: true, data: { id: req.params.id } });
+    return res.json({ success: true, data: { id: req.params.id, deleted } });
   } catch (error) {
     return serverError(res, 'не удалось удалить проект', error, 'Failed to delete project');
   }
