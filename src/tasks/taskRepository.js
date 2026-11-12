@@ -4,7 +4,6 @@ import { dateKeyToDb, dbToDateKey, utcToZonedDateTime, zonedTimeToUtc } from './
 export const TASK_STATUSES = ['todo', 'done'];
 export const TASK_PRIORITIES = ['low', 'normal', 'high'];
 
-/** Reminders set this far in the past are rejected (allows for slow form submits). */
 const REMINDER_PAST_TOLERANCE_MS = 60 * 1000;
 
 export class TaskError extends Error {
@@ -82,10 +81,6 @@ const clearedReminder = {
   reminderLastError: null,
 };
 
-/**
- * Returns the reminder columns to write, or null when nothing changes.
- * Re-saving the same moment keeps the delivery state, so a sent reminder is never sent twice.
- */
 const reminderChanges = (existing, input, now) => {
   if (input === undefined) return null;
   if (input === null) return existing?.reminderAt ? clearedReminder : null;
@@ -96,7 +91,6 @@ const reminderChanges = (existing, input, now) => {
     existing.reminderAt.getTime() === at.getTime() &&
     existing.reminderTimezone === input.timezone
   ) {
-    // Saving a failed reminder again is the user's way to retry it (e.g. after fixing the config).
     if (existing.reminderStatus !== 'failed') return null;
     return {
       reminderStatus: 'scheduled',
@@ -118,7 +112,6 @@ const reminderChanges = (existing, input, now) => {
   };
 };
 
-/** Completing a task cancels a pending reminder; reopening it restores one that is still ahead. */
 const applyStatusRules = (state, data, now) => {
   if (state.status === 'done') {
     if (state.reminderStatus === 'scheduled' || state.reminderStatus === 'failed') {
@@ -142,7 +135,12 @@ export const listTasksForDay = async (userId, date) => {
   const tasks = await prisma.task.findMany({
     where: {
       userId,
-      OR: [{ date: dateKeyToDb(date) }, { date: null, status: 'todo' }, { isCurrent: true }],
+      OR: [
+        { date: dateKeyToDb(date) },
+        { date: null, status: 'todo' },
+        { date: { lt: dateKeyToDb(date) }, status: 'todo' },
+        { isCurrent: true },
+      ],
     },
     include: { project: projectSelect },
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
@@ -248,7 +246,6 @@ export const deleteTask = async (userId, id) => {
   return count > 0;
 };
 
-/** Stores the order of one list: the position of each task becomes its index in `ids`. */
 export const reorderTasks = (userId, ids) =>
   prisma.$transaction(async (tx) => {
     const owned = await tx.task.count({ where: { userId, id: { in: ids } } });
