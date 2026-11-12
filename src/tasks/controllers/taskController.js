@@ -27,7 +27,11 @@ const handleError = (res, label, error, message) => {
   return res.status(500).json({ success: false, message });
 };
 
+const parseChangedAt = (value) =>
+  typeof value === 'string' ? new Date(Math.min(Date.parse(value), Date.now())) : undefined;
+
 const pickInput = (body) => ({
+  changedAt: parseChangedAt(body.changedAt),
   title: typeof body.title === 'string' ? body.title.trim() : undefined,
   projectId: body.projectId,
   date: body.date,
@@ -78,8 +82,8 @@ export const postTask = async (req, res) => {
   if (!errors.isEmpty()) return badRequest(res, errors);
 
   try {
-    const task = await createTask(req.user.id, pickInput(req.body));
-    return res.status(201).json({ success: true, data: task });
+    const { task, created } = await createTask(req.user.id, { ...pickInput(req.body), id: req.body.id });
+    return res.status(created ? 201 : 200).json({ success: true, data: task });
   } catch (error) {
     return handleError(res, 'create failed', error, 'Failed to create task');
   }
@@ -104,8 +108,7 @@ export const removeTask = async (req, res) => {
 
   try {
     const deleted = await deleteTask(req.user.id, req.params.id);
-    if (!deleted) return notFound(res);
-    return res.json({ success: true, data: { id: req.params.id } });
+    return res.json({ success: true, data: { id: req.params.id, deleted } });
   } catch (error) {
     return handleError(res, 'delete failed', error, 'Failed to delete task');
   }

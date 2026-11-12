@@ -8,6 +8,7 @@ import projectRoutes from './src/projects/routes/projectRoutes.js';
 import authRoutes from './src/auth/routes/authRoutes.js';
 import userRoutes from './src/users/routes/userRoutes.js';
 import taskRoutes from './src/tasks/routes/taskRoutes.js';
+import syncRoutes from './src/sync/syncRoutes.js';
 import { startReminderWorker } from './src/reminders/reminderWorker.js';
 import { deleteExpiredTokens } from './src/auth/services/tokenService.js';
 
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/sync', syncRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

@@ -49,7 +49,6 @@ export const toPublicTask = (task) => ({
   reminder: toPublicReminder(task),
 });
 
-/** Tasks of one list share a date and the "main" (high priority) flag. */
 const groupWhere = (userId, date, priority) => ({
   userId,
   date: dateKeyToDb(date),
@@ -81,7 +80,9 @@ const clearedReminder = {
   reminderLastError: null,
 };
 
-const reminderChanges = (existing, input, now) => {
+const MISSED_REMINDER_ERROR = 'The reminder time passed before this change reached the server';
+
+const reminderChanges = (existing, input, now, changedAt) => {
   if (input === undefined) return null;
   if (input === null) return existing?.reminderAt ? clearedReminder : null;
 
@@ -92,6 +93,7 @@ const reminderChanges = (existing, input, now) => {
     existing.reminderTimezone === input.timezone
   ) {
     if (existing.reminderStatus !== 'failed') return null;
+    if (changedAt && changedAt.getTime() <= existing.updatedAt.getTime()) return null;
     return {
       reminderStatus: 'scheduled',
       reminderNextAttemptAt: now,
@@ -101,7 +103,17 @@ const reminderChanges = (existing, input, now) => {
     };
   }
   if (at.getTime() < now.getTime() - REMINDER_PAST_TOLERANCE_MS) {
-    throw new TaskError(400, 'Reminder time is in the past');
+    const madeAt = changedAt ?? now;
+    if (at.getTime() < madeAt.getTime() - REMINDER_PAST_TOLERANCE_MS) {
+      throw new TaskError(400, 'Reminder time is in the past');
+    }
+    return {
+      ...clearedReminder,
+      reminderAt: at,
+      reminderTimezone: input.timezone,
+      reminderStatus: 'failed',
+      reminderLastError: MISSED_REMINDER_ERROR,
+    };
   }
   return {
     ...clearedReminder,
@@ -171,7 +183,31 @@ export const findTask = async (userId, id) => {
   return task ? toPublicTask(task) : null;
 };
 
-export const createTask = (userId, input, now = new Date()) =>
+const findOwnedTask = async (userId, id) => {
+  const task = await prisma.task.findUnique({ where: { id }, include: { project: projectSelect } });
+  if (!task) return null;
+  if (task.userId !== userId) throw new TaskError(409, 'This task id is already taken');
+  return toPublicTask(task);
+};
+
+const isUniqueViolation = (error) => error?.code === 'P2002';
+
+export const createTask = async (userId, input, now = new Date()) => {
+  if (input.id) {
+    const existing = await findOwnedTask(userId, input.id);
+    if (existing) return { task: existing, created: false };
+  }
+  try {
+    return { task: await insertTask(userId, input, now), created: true };
+  } catch (error) {
+    if (!input.id || !isUniqueViolation(error)) throw error;
+    const existing = await findOwnedTask(userId, input.id);
+    if (!existing) throw error;
+    return { task: existing, created: false };
+  }
+};
+
+const insertTask = (userId, input, now) =>
   prisma.$transaction(async (tx) => {
     const date = input.date ?? null;
     const priority = input.priority ?? 'normal';
@@ -179,6 +215,7 @@ export const createTask = (userId, input, now = new Date()) =>
     if (input.projectId) await assertProject(tx, userId, input.projectId);
 
     const data = {
+      ...(input.id ? { id: input.id } : {}),
       userId,
       title: input.title,
       projectId: input.projectId ?? null,
@@ -188,7 +225,7 @@ export const createTask = (userId, input, now = new Date()) =>
       status,
       completedAt: status === 'done' ? now : null,
       position: await nextPosition(tx, userId, date, priority),
-      ...(reminderChanges(null, input.reminder, now) ?? {}),
+      ...(reminderChanges(null, input.reminder, now, input.changedAt) ?? {}),
     };
     applyStatusRules({ ...data }, data, now);
 
@@ -234,7 +271,7 @@ export const updateTask = (userId, id, input, now = new Date()) =>
       await tx.task.updateMany({ where: { userId, isCurrent: true }, data: { isCurrent: false } });
     }
 
-    Object.assign(data, reminderChanges(existing, input.reminder, now) ?? {});
+    Object.assign(data, reminderChanges(existing, input.reminder, now, input.changedAt) ?? {});
     applyStatusRules({ ...existing, ...data }, data, now);
 
     const task = await tx.task.update({ where: { id }, data, include: { project: projectSelect } });
@@ -248,10 +285,36 @@ export const deleteTask = async (userId, id) => {
 
 export const reorderTasks = (userId, ids) =>
   prisma.$transaction(async (tx) => {
-    const owned = await tx.task.count({ where: { userId, id: { in: ids } } });
-    if (owned !== ids.length) throw new TaskError(404, 'Task not found');
+    const owned = await tx.task.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
+    const ownedIds = new Set(owned.map((task) => task.id));
+    const order = ids
+      .map((id, position) => ({ id, position }))
+      .filter(({ id }) => ownedIds.has(id));
     await Promise.all(
-      ids.map((id, position) => tx.task.update({ where: { id }, data: { position } })),
+      order.map(({ id, position }) => tx.task.update({ where: { id }, data: { position } })),
     );
-    return ids.map((id, position) => ({ id, position }));
+    return order;
   });
+
+const DAY_MS = 86_400_000;
+
+export const listTasksForSnapshot = async (userId, from, to) => {
+  const fromDb = dateKeyToDb(from);
+  const toDb = dateKeyToDb(to);
+  const tasks = await prisma.task.findMany({
+    where: {
+      userId,
+      OR: [
+        { status: 'todo' },
+        { date: { gte: fromDb, lte: toDb } },
+        {
+          date: null,
+          completedAt: { gte: new Date(fromDb.getTime() - DAY_MS), lt: new Date(toDb.getTime() + 2 * DAY_MS) },
+        },
+      ],
+    },
+    include: { project: projectSelect },
+    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+  });
+  return tasks.map(toPublicTask);
+};

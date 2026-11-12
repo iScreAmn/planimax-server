@@ -45,6 +45,7 @@ model RefreshToken {
   tokenHash String    @unique @map("token_hash")
   expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
+  rotatedAt DateTime? @map("rotated_at")
   userAgent String?   @map("user_agent")
   ip        String?
   createdAt DateTime  @default(now()) @map("created_at")
@@ -57,14 +58,15 @@ model RefreshToken {
 }
 
 model Project {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
-  name      String   @db.VarChar(30)
-  color     String   @db.VarChar(7)
-  notes     String   @default("")
-  inPlanner Boolean  @default(false) @map("in_planner")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  name         String   @db.VarChar(30)
+  color        String   @db.VarChar(7)
+  notes        String   @default("")
+  notesVersion Int      @default(0) @map("notes_version")
+  inPlanner    Boolean  @default(false) @map("in_planner")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks Task[]

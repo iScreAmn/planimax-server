@@ -13,7 +13,7 @@ export const listTasksRules = [
 
 const SUMMARY_MAX_DAYS = 62;
 
-export const summaryRules = [
+export const dateRangeRules = (maxDays) => [
   query('from').custom(isValidDateKey).withMessage('from must be YYYY-MM-DD'),
   query('to')
     .custom(isValidDateKey)
@@ -21,10 +21,14 @@ export const summaryRules = [
     .custom((to, { req }) => {
       const days = (Date.parse(to) - Date.parse(req.query.from)) / 86_400_000;
       if (!(days >= 0)) throw new Error('to must not be before from');
-      if (days > SUMMARY_MAX_DAYS) throw new Error(`The range is longer than ${SUMMARY_MAX_DAYS} days`);
+      if (days > maxDays) throw new Error(`The range is longer than ${maxDays} days`);
       return true;
     }),
 ];
+
+export const summaryRules = dateRangeRules(SUMMARY_MAX_DAYS);
+
+export const clientIdRule = (message) => body('id').optional().isUUID().withMessage(message);
 
 const titleRule = () =>
   body('title')
@@ -54,7 +58,14 @@ const reminderRule = () =>
       return true;
     });
 
+const changedAtRule = () =>
+  body('changedAt')
+    .optional()
+    .isISO8601({ strict: true, strictSeparator: true })
+    .withMessage('changedAt must be an ISO date-time');
+
 const sharedRules = () => [
+  changedAtRule(),
   nullable('projectId', (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v), 'Invalid project'),
   nullable('date', isValidDateKey, 'Date must be YYYY-MM-DD'),
   nullable('time', isValidTime, 'Time must be HH:MM'),
@@ -63,7 +74,11 @@ const sharedRules = () => [
   reminderRule(),
 ];
 
-export const createTaskRules = [titleRule(), ...sharedRules()];
+export const createTaskRules = [
+  clientIdRule('Invalid id'),
+  titleRule(),
+  ...sharedRules(),
+];
 
 export const updateTaskRules = [
   ...taskIdRules,

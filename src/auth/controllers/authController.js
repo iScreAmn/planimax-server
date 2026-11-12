@@ -109,13 +109,14 @@ export const refresh = async (req, res) => {
     }
 
     const user = await userRepository.findById(stored.userId);
-    await tokenService.revokeRefreshToken(token);
 
     if (!user || user.status !== 'approved') {
+      await tokenService.revokeRefreshToken(token);
       clearAuthCookies(res);
       return unauthorized(res);
     }
 
+    await tokenService.markRefreshTokenRotated(stored.id);
     await issueSession(res, user, req);
     return res.json({ success: true, data: { user: userRepository.toPublicUser(user) } });
   } catch (error) {
