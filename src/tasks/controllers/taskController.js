@@ -27,8 +27,11 @@ const handleError = (res, label, error, message) => {
   return res.status(500).json({ success: false, message });
 };
 
+const parseChangedAt = (value) =>
+  typeof value === 'string' ? new Date(Math.min(Date.parse(value), Date.now())) : undefined;
+
 const pickInput = (body) => ({
-  changedAt: typeof body.changedAt === 'string' ? new Date(body.changedAt) : undefined,
+  changedAt: parseChangedAt(body.changedAt),
   title: typeof body.title === 'string' ? body.title.trim() : undefined,
   projectId: body.projectId,
   date: body.date,

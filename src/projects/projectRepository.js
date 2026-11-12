@@ -73,7 +73,8 @@ export const updateProject = (userId, id, input) =>
     if (input.color !== undefined) data.color = input.color;
     if (input.inPlanner !== undefined) data.inPlanner = input.inPlanner;
 
-    if (input.notes !== undefined && input.notes !== existing.notes) {
+    const changesNotes = input.notes !== undefined && input.notes !== existing.notes;
+    if (changesNotes) {
       if (!matchesVersion(existing, input)) throw notesConflict();
       data.notes = input.notes;
       data.notesVersion = existing.notesVersion + 1;
@@ -82,15 +83,14 @@ export const updateProject = (userId, id, input) =>
 
     if (Object.keys(data).length === 0) return toPublicProject(existing);
 
+    const where = changesNotes ? { id, notesVersion: existing.notesVersion } : { id };
     try {
-      const project = await tx.project.update({
-        where: { id, notesVersion: existing.notesVersion },
-        data,
-      });
-      return toPublicProject(project);
+      return toPublicProject(await tx.project.update({ where, data }));
     } catch (error) {
-      if (error?.code === 'P2025') throw notesConflict();
-      throw error;
+      if (error?.code !== 'P2025') throw error;
+      const stillExists = await tx.project.count({ where: { id, userId } });
+      if (changesNotes && stillExists) throw notesConflict();
+      return null;
     }
   });
 
