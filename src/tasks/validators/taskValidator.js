@@ -4,7 +4,6 @@ import { isValidDateKey, isValidTime, isValidTimeZone } from '../timezone.js';
 
 export const TITLE_MAX_LENGTH = 200;
 const REORDER_MAX_IDS = 500;
-const CHANGED_AT_MAX_SKEW_MS = 5 * 60 * 1000;
 
 export const taskIdRules = [param('id').isUUID().withMessage('Invalid id')];
 
@@ -14,7 +13,7 @@ export const listTasksRules = [
 
 const SUMMARY_MAX_DAYS = 62;
 
-export const summaryRules = [
+export const dateRangeRules = (maxDays) => [
   query('from').custom(isValidDateKey).withMessage('from must be YYYY-MM-DD'),
   query('to')
     .custom(isValidDateKey)
@@ -22,10 +21,14 @@ export const summaryRules = [
     .custom((to, { req }) => {
       const days = (Date.parse(to) - Date.parse(req.query.from)) / 86_400_000;
       if (!(days >= 0)) throw new Error('to must not be before from');
-      if (days > SUMMARY_MAX_DAYS) throw new Error(`The range is longer than ${SUMMARY_MAX_DAYS} days`);
+      if (days > maxDays) throw new Error(`The range is longer than ${maxDays} days`);
       return true;
     }),
 ];
+
+export const summaryRules = dateRangeRules(SUMMARY_MAX_DAYS);
+
+export const clientIdRule = (message) => body('id').optional().isUUID().withMessage(message);
 
 const titleRule = () =>
   body('title')
@@ -59,9 +62,7 @@ const changedAtRule = () =>
   body('changedAt')
     .optional()
     .isISO8601({ strict: true, strictSeparator: true })
-    .withMessage('changedAt must be an ISO date-time')
-    .custom((value) => Date.parse(value) <= Date.now() + CHANGED_AT_MAX_SKEW_MS)
-    .withMessage('changedAt is in the future');
+    .withMessage('changedAt must be an ISO date-time');
 
 const sharedRules = () => [
   changedAtRule(),
@@ -74,7 +75,7 @@ const sharedRules = () => [
 ];
 
 export const createTaskRules = [
-  body('id').optional().isUUID().withMessage('Invalid id'),
+  clientIdRule('Invalid id'),
   titleRule(),
   ...sharedRules(),
 ];
