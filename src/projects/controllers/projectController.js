@@ -62,14 +62,22 @@ export const patchProject = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return badRequest(res, errors);
 
-  const { name, color, notes, inPlanner } = req.body;
+  const { name, color, notes, inPlanner, expectedUpdatedAt } = req.body;
   try {
-    const project = await updateProject(req.user.id, req.params.id, {
+    const { project, conflict } = await updateProject(req.user.id, req.params.id, {
       name: typeof name === 'string' ? name.trim() : undefined,
       color: typeof color === 'string' ? color.toLowerCase() : undefined,
       notes,
       inPlanner,
+      expectedUpdatedAt,
     });
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        code: 'PROJECT_NOTES_CONFLICT',
+        message: 'Project changed since these notes were loaded',
+      });
+    }
     if (!project) return notFound(res);
     return res.json({ success: true, data: project });
   } catch (error) {

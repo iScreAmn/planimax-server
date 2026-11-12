@@ -32,5 +32,13 @@ export const updateProjectRules = [
     .isString()
     .isLength({ max: NOTES_MAX_LENGTH })
     .withMessage('Заметка слишком длинная'),
+  body('expectedUpdatedAt')
+    .if((value, { req }) => value !== undefined || req.body?.notes !== undefined)
+    .custom((value) => {
+      if (typeof value !== 'string') return false;
+      const version = new Date(value);
+      return Number.isFinite(version.getTime()) && version.toISOString() === value;
+    })
+    .withMessage('A valid project version is required to save notes'),
   body('inPlanner').optional().isBoolean({ strict: true }),
 ];
