@@ -73,8 +73,16 @@ export const markRefreshTokenRotated = (id) =>
 
 export const revokeRefreshToken = async (token) => {
   if (!token) return;
+  const tokenHash = hashToken(token);
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, select: { userId: true } });
+  if (!stored) return;
+  const graceStart = new Date(Date.now() - REFRESH_REUSE_GRACE_MS);
   await prisma.refreshToken.updateMany({
-    where: { tokenHash: hashToken(token), revokedAt: null },
+    where: {
+      userId: stored.userId,
+      revokedAt: null,
+      OR: [{ tokenHash }, { rotatedAt: { gt: graceStart } }],
+    },
     data: { revokedAt: new Date() },
   });
 };
