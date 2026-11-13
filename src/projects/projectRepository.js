@@ -1,19 +1,15 @@
 import { prisma } from '../config/prisma.js';
+import { ProjectError } from './projectError.js';
+import { notesConflict, resolveNotesUpdate } from './notesUpdate.js';
 
-export class ProjectError extends Error {
-  constructor(status, message, code) {
-    super(message);
-    this.name = 'ProjectError';
-    this.status = status;
-    this.code = code;
-  }
-}
+export { ProjectError };
 
 export const toPublicProject = (project) => ({
   id: project.id,
   name: project.name,
   color: project.color,
   notes: project.notes,
+  notesDoc: project.notesDoc,
   notesVersion: project.notesVersion,
   inPlanner: project.inPlanner,
   createdAt: project.createdAt,
@@ -55,14 +51,6 @@ export const createProject = async (userId, { id, name, color, inPlanner }) => {
   }
 };
 
-const notesConflict = () =>
-  new ProjectError(409, 'Project notes changed since this version', 'PROJECT_NOTES_CONFLICT');
-
-const matchesVersion = (project, { expectedNotesVersion, expectedUpdatedAt }) =>
-  expectedNotesVersion !== undefined
-    ? project.notesVersion === expectedNotesVersion
-    : project.updatedAt.getTime() === new Date(expectedUpdatedAt).getTime();
-
 export const updateProject = (userId, id, input) =>
   prisma.$transaction(async (tx) => {
     const existing = await tx.project.findFirst({ where: { id, userId } });
@@ -73,23 +61,22 @@ export const updateProject = (userId, id, input) =>
     if (input.color !== undefined) data.color = input.color;
     if (input.inPlanner !== undefined) data.inPlanner = input.inPlanner;
 
-    const changesNotes = input.notes !== undefined && input.notes !== existing.notes;
-    if (changesNotes) {
-      if (!matchesVersion(existing, input)) throw notesConflict();
-      data.notes = input.notes;
+    const notesUpdate = resolveNotesUpdate(existing, input);
+    if (notesUpdate) {
+      Object.assign(data, notesUpdate.data);
       data.notesVersion = existing.notesVersion + 1;
       data.updatedAt = new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1));
     }
 
     if (Object.keys(data).length === 0) return toPublicProject(existing);
 
-    const where = changesNotes ? { id, notesVersion: existing.notesVersion } : { id };
+    const where = notesUpdate ? { id, ...notesUpdate.where } : { id };
     try {
       return toPublicProject(await tx.project.update({ where, data }));
     } catch (error) {
       if (error?.code !== 'P2025') throw error;
       const stillExists = await tx.project.count({ where: { id, userId } });
-      if (changesNotes && stillExists) throw notesConflict();
+      if (notesUpdate && stillExists) throw notesConflict();
       return null;
     }
   });

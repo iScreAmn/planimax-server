@@ -63,6 +63,7 @@ model Project {
   name         String   @db.VarChar(30)
   color        String   @db.VarChar(7)
   notes        String   @default("")
+  notesDoc     String?  @map("notes_doc")
   notesVersion Int      @default(0) @map("notes_version")
   inPlanner    Boolean  @default(false) @map("in_planner")
   createdAt    DateTime @default(now()) @map("created_at")

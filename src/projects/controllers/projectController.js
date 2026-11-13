@@ -67,12 +67,13 @@ export const patchProject = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return badRequest(res, errors);
 
-  const { name, color, notes, inPlanner, expectedUpdatedAt, expectedNotesVersion } = req.body;
+  const { name, color, notes, notesDoc, inPlanner, expectedUpdatedAt, expectedNotesVersion } = req.body;
   try {
     const project = await updateProject(req.user.id, req.params.id, {
       name: typeof name === 'string' ? name.trim() : undefined,
       color: typeof color === 'string' ? color.toLowerCase() : undefined,
       notes,
+      notesDoc,
       inPlanner,
       expectedUpdatedAt,
       expectedNotesVersion,
