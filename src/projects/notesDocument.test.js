@@ -119,6 +119,17 @@ test('rejects unknown nodes, fields and attributes', () => {
   expectError(doc(paragraph(text(''))));
   expectError(doc(paragraph({ type: 'text', text: 'a', attrs: {} })));
   expectError(doc(paragraph({ type: 'hardBreak', content: [] })));
+  expectError(doc(paragraph({ type: 'linkMention' })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'javascript:alert(1)' } })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com', image: 'data:image/png;base64,AA' } })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com', icon: '/favicon.ico' } })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com', title: 't'.repeat(301) } })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com', onclick: 'x' } })));
+  expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com' }, content: [text('x')] })));
+  expectError(doc({ type: 'details', content: [
+    { type: 'detailsSummary', content: [{ type: 'linkMention', attrs: { href: 'https://example.com' } }] },
+    { type: 'detailsContent', content: [paragraph()] },
+  ] }));
   expectError(JSON.parse('{"type":"doc","content":[{"type":"paragraph","__proto__":{"x":1}}]}'));
 });
 

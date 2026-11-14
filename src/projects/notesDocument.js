@@ -16,12 +16,20 @@ export const TEXT_COLORS = Object.freeze([
   'red',
 ]);
 export const LINK_HREF_MAX_LENGTH = 2048;
+export const LINK_TITLE_MAX_LENGTH = 300;
+export const LINK_DESCRIPTION_MAX_LENGTH = 500;
+export const LINK_SITE_MAX_LENGTH = 100;
 export const TEXT_ALIGNS = Object.freeze(['left', 'center', 'right']);
 
 const TEXTBLOCKS = new Set(['paragraph', 'heading', 'detailsSummary']);
 
-const inlineText = (node) =>
-  (node.content ?? []).map((child) => (child.type === 'hardBreak' ? '\n' : (child.text ?? ''))).join('');
+const inlineChildText = (child) => {
+  if (child.type === 'hardBreak') return '\n';
+  if (child.type === 'linkMention') return child.attrs?.title ?? child.attrs?.href ?? '';
+  return child.text ?? '';
+};
+
+const inlineText = (node) => (node.content ?? []).map(inlineChildText).join('');
 
 export const extractNotesText = (doc) => {
   const lines = [];
@@ -62,11 +70,13 @@ const isLinkHref = (value) =>
 
 const BLOCKS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'taskList', 'details'];
 const INLINE = ['text', 'hardBreak'];
+const RICH_INLINE = [...INLINE, 'linkMention'];
+const shortText = (max) => optional((value) => typeof value === 'string' && value.length > 0 && value.length <= max);
 
 const NODES = {
   doc: { content: { rest: BLOCKS, min: 1 } },
-  paragraph: { attrs: { textAlign: align }, content: { rest: INLINE } },
-  heading: { attrs: { level: oneOf([1, 2]), textAlign: align }, content: { rest: INLINE } },
+  paragraph: { attrs: { textAlign: align }, content: { rest: RICH_INLINE } },
+  heading: { attrs: { level: oneOf([1, 2]), textAlign: align }, content: { rest: RICH_INLINE } },
   bulletList: { content: { rest: ['listItem'], min: 1 } },
   orderedList: {
     attrs: { start: optional((value) => Number.isInteger(value) && value >= 1 && value <= 99_999), type: absent },
@@ -82,6 +92,16 @@ const NODES = {
   detailsSummary: { content: { rest: INLINE } },
   detailsContent: { content: { rest: BLOCKS, min: 1 } },
   hardBreak: {},
+  linkMention: {
+    attrs: {
+      href: isLinkHref,
+      title: shortText(LINK_TITLE_MAX_LENGTH),
+      description: shortText(LINK_DESCRIPTION_MAX_LENGTH),
+      image: optional(isLinkHref),
+      icon: optional(isLinkHref),
+      site: shortText(LINK_SITE_MAX_LENGTH),
+    },
+  },
   text: {},
 };
 
