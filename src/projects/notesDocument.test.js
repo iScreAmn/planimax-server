@@ -22,7 +22,7 @@ const fullDoc = doc(
     attrs: { textAlign: 'right' },
     content: [
       text('Bold', [{ type: 'bold' }]),
-      text(' and '),
+      text(' and ', [{ type: 'link', attrs: { href: 'https://example.com/a?b=1' } }]),
       text('red', [{ type: 'italic' }, { type: 'textColor', attrs: { color: 'red' } }]),
       { type: 'hardBreak' },
       text('next line', [{ type: 'strike' }]),
@@ -133,6 +133,11 @@ test('rejects invalid attribute values', () => {
 
 test('rejects marks outside the allowed set', () => {
   expectError(doc(paragraph(text('x', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'link' }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'link', attrs: { href: 'example.com' } }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'link', attrs: { href: 'https://example.com/ onclick' } }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'link', attrs: { href: 'https://example.com', target: '_self' } }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'link', attrs: { href: `https://example.com/${'a'.repeat(2048)}` } }]))));
   expectError(doc(paragraph(text('x', [{ type: 'textColor', attrs: { color: '#ff0000' } }]))));
   expectError(doc(paragraph(text('x', [{ type: 'textColor', attrs: { color: 'red;background:url(x)' } }]))));
   expectError(doc(paragraph(text('x', [{ type: 'textColor' }]))));

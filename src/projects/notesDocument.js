@@ -15,6 +15,7 @@ export const TEXT_COLORS = Object.freeze([
   'pink',
   'red',
 ]);
+export const LINK_HREF_MAX_LENGTH = 2048;
 export const TEXT_ALIGNS = Object.freeze(['left', 'center', 'right']);
 
 const TEXTBLOCKS = new Set(['paragraph', 'heading', 'detailsSummary']);
@@ -56,6 +57,9 @@ const optional = (check) => (value) => absent(value) || check(value);
 const oneOf = (values) => (value) => values.includes(value);
 const align = optional(oneOf(TEXT_ALIGNS));
 
+const isLinkHref = (value) =>
+  typeof value === 'string' && value.length <= LINK_HREF_MAX_LENGTH && /^https?:\/\/[^\s]+$/i.test(value) && URL.canParse(value);
+
 const BLOCKS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'taskList', 'details'];
 const INLINE = ['text', 'hardBreak'];
 
@@ -83,6 +87,7 @@ const NODES = {
 
 const MARKS = {
   bold: {},
+  link: { attrs: { href: isLinkHref } },
   italic: {},
   strike: {},
   textColor: { attrs: { color: oneOf(TEXT_COLORS) } },
