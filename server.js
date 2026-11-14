@@ -1,8 +1,8 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
 import { pingDB, disconnectDB } from './src/config/prisma.js';
 import projectRoutes from './src/projects/routes/projectRoutes.js';
 import authRoutes from './src/auth/routes/authRoutes.js';
@@ -11,8 +11,6 @@ import taskRoutes from './src/tasks/routes/taskRoutes.js';
 import syncRoutes from './src/sync/syncRoutes.js';
 import { startReminderWorker } from './src/reminders/reminderWorker.js';
 import { deleteExpiredTokens } from './src/auth/services/tokenService.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 5055);
@@ -40,6 +38,14 @@ app.use(
     allowedHeaders: ['Content-Type'],
   }),
 );
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (!origin || SAFE_METHODS.has(req.method) || allowedOrigins.has(origin)) return next();
+  return res.status(403).json({ success: false, message: 'Origin is not allowed' });
+});
 
 app.use(helmet());
 app.use(cookieParser());
@@ -73,6 +79,10 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ success: false, code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large' });
   }
+  const status = Number(err.status || err.statusCode);
+  if (status >= 400 && status < 500) {
+    return res.status(status).json({ success: false, message: 'Bad request' });
+  }
   console.error('Unhandled error:', err);
   return res.status(500).json({
     success: false,
@@ -87,11 +97,20 @@ const cleanupTokens = () =>
     console.error('[auth] token cleanup failed:', error.message || error),
   );
 
+const jwtSecret = String(process.env.JWT_SECRET || '').trim();
+if (!jwtSecret && isProduction) {
+  console.error('[auth] JWT_SECRET is not set: refusing to start in production');
+  process.exit(1);
+}
+if (jwtSecret && jwtSecret.length < 32) {
+  console.warn('[auth] JWT_SECRET is shorter than 32 characters: use a longer random value');
+}
+
 let stopReminderWorker = () => {};
 
 const server = app.listen(PORT, () => {
   console.log(`Planimax API running on port ${PORT}`);
-  if (!String(process.env.JWT_SECRET || '').trim()) {
+  if (!jwtSecret) {
     console.warn('[auth] JWT_SECRET is not set: sign-in will fail');
   }
   cleanupTokens();

@@ -6,7 +6,7 @@ const unauthorized = (res) => res.status(401).json({ success: false, message: 'U
 
 export const requireAuth = async (req, res, next) => {
   const token = req.cookies?.[ACCESS_COOKIE];
-  if (!token) return unauthorized(res);
+  if (typeof token !== 'string' || !token) return unauthorized(res);
 
   let payload;
   try {

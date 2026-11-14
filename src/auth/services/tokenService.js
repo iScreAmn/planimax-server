@@ -3,7 +3,13 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/prisma.js';
 
 const ACCESS_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
-const REFRESH_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30);
+const DEFAULT_REFRESH_TTL_DAYS = 30;
+const JWT_ALGORITHM = 'HS256';
+
+const REFRESH_TTL_DAYS = (() => {
+  const days = Number(process.env.REFRESH_TOKEN_TTL_DAYS);
+  return Number.isFinite(days) && days > 0 ? days : DEFAULT_REFRESH_TTL_DAYS;
+})();
 
 export const REFRESH_TTL_MS = REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000;
 export const REFRESH_REUSE_GRACE_MS = 60 * 1000;
@@ -30,10 +36,10 @@ export const signAccessToken = (user) =>
       pwdAt: new Date(user.passwordUpdatedAt).toISOString(),
     },
     getSecret(),
-    { expiresIn: ACCESS_TTL },
+    { algorithm: JWT_ALGORITHM, expiresIn: Math.floor(ACCESS_TTL_MS / 1000) },
   );
 
-export const verifyAccessToken = (token) => jwt.verify(token, getSecret());
+export const verifyAccessToken = (token) => jwt.verify(token, getSecret(), { algorithms: [JWT_ALGORITHM] });
 
 export const issueRefreshToken = async (userId, { userAgent, ip } = {}) => {
   const token = crypto.randomBytes(48).toString('base64url');
@@ -51,8 +57,10 @@ export const issueRefreshToken = async (userId, { userAgent, ip } = {}) => {
   return token;
 };
 
+const isToken = (token) => typeof token === 'string' && token.length > 0 && token.length <= 256;
+
 export const findValidRefreshToken = async (token) => {
-  if (!token) return null;
+  if (!isToken(token)) return null;
 
   const stored = await prisma.refreshToken.findUnique({
     where: { tokenHash: hashToken(token) },
@@ -72,7 +80,7 @@ export const markRefreshTokenRotated = (id) =>
   });
 
 export const revokeRefreshToken = async (token) => {
-  if (!token) return;
+  if (!isToken(token)) return;
   const tokenHash = hashToken(token);
   const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, select: { userId: true } });
   if (!stored) return;

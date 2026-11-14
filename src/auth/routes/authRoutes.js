@@ -17,11 +17,12 @@ const limiter = (max, message) =>
 
 const loginLimiter = limiter(20, 'Too many sign-in attempts. Try again later.');
 const registerLimiter = limiter(5, 'Too many registration attempts. Try again later.');
+const sessionLimiter = limiter(300, 'Too many requests. Try again later.');
 
 router.post('/register', registerLimiter, registerRules, register);
 router.post('/login', loginLimiter, loginRules, login);
-router.post('/refresh', refresh);
-router.post('/logout', logout);
+router.post('/refresh', sessionLimiter, refresh);
+router.post('/logout', sessionLimiter, logout);
 router.get('/me', requireAuth, me);
 
 export default router;
