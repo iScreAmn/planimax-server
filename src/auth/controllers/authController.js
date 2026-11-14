@@ -29,10 +29,9 @@ const requestMeta = (req) => ({
   ip: req.ip || '',
 });
 
-const issueSession = async (res, user, req) => {
-  const accessToken = tokenService.signAccessToken(user);
-  const refreshToken = await tokenService.issueRefreshToken(user.id, requestMeta(req));
-  setAuthCookies(res, { accessToken, refreshToken });
+const issueSession = async (res, user, req, sessionId) => {
+  const { token, familyId } = await tokenService.issueRefreshToken(user.id, requestMeta(req), sessionId);
+  setAuthCookies(res, { accessToken: tokenService.signAccessToken(user, familyId), refreshToken: token });
 };
 
 export const register = async (req, res) => {
@@ -101,9 +100,16 @@ export const login = async (req, res) => {
 export const refresh = async (req, res) => {
   try {
     const token = req.cookies?.[REFRESH_COOKIE];
-    const stored = await tokenService.findValidRefreshToken(token);
+    const stored = await tokenService.findRefreshToken(token);
 
     if (!stored) {
+      clearAuthCookies(res);
+      return unauthorized(res);
+    }
+
+    if (stored.reused) {
+      await tokenService.revokeTokenFamily(stored.familyId);
+      console.warn(`[auth] rotated refresh token reused, session revoked: user=${stored.userId}`);
       clearAuthCookies(res);
       return unauthorized(res);
     }
@@ -117,7 +123,7 @@ export const refresh = async (req, res) => {
     }
 
     await tokenService.markRefreshTokenRotated(stored.id);
-    await issueSession(res, user, req);
+    await issueSession(res, user, req, stored.familyId);
     return res.json({ success: true, data: { user: userRepository.toPublicUser(user) } });
   } catch (error) {
     console.error('[auth] refresh error:', error);
