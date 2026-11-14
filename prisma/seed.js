@@ -4,7 +4,7 @@ import { prisma } from '../src/config/prisma.js';
 
 const BCRYPT_ROUNDS = 12;
 const PASSWORD_MIN_LENGTH = 8;
-const PASSWORD_MAX_LENGTH = 72;
+const PASSWORD_MAX_BYTES = 72;
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
@@ -30,9 +30,9 @@ const seed = async () => {
     });
     console.log(`[seed] ${email} already exists, ensured role=admin and status=approved`);
   } else {
-    if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+    if (password.length < PASSWORD_MIN_LENGTH || Buffer.byteLength(password, 'utf8') > PASSWORD_MAX_BYTES) {
       throw new Error(
-        `[seed] ADMIN_PASSWORD must be ${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters`,
+        `[seed] ADMIN_PASSWORD must be at least ${PASSWORD_MIN_LENGTH} characters and at most ${PASSWORD_MAX_BYTES} bytes`,
       );
     }
     admin = await prisma.user.create({

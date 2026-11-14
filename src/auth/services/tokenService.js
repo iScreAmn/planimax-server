@@ -3,7 +3,13 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/prisma.js';
 
 const ACCESS_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
-const REFRESH_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30);
+const DEFAULT_REFRESH_TTL_DAYS = 30;
+const JWT_ALGORITHM = 'HS256';
+
+const REFRESH_TTL_DAYS = (() => {
+  const days = Number(process.env.REFRESH_TOKEN_TTL_DAYS);
+  return Number.isFinite(days) && days > 0 ? days : DEFAULT_REFRESH_TTL_DAYS;
+})();
 
 export const REFRESH_TTL_MS = REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000;
 export const REFRESH_REUSE_GRACE_MS = 60 * 1000;
@@ -23,24 +29,26 @@ const getSecret = () => {
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
-export const signAccessToken = (user) =>
+export const signAccessToken = (user, sessionId) =>
   jwt.sign(
     {
       sub: user.id,
+      sid: sessionId,
       pwdAt: new Date(user.passwordUpdatedAt).toISOString(),
     },
     getSecret(),
-    { expiresIn: ACCESS_TTL },
+    { algorithm: JWT_ALGORITHM, expiresIn: Math.floor(ACCESS_TTL_MS / 1000) },
   );
 
-export const verifyAccessToken = (token) => jwt.verify(token, getSecret());
+export const verifyAccessToken = (token) => jwt.verify(token, getSecret(), { algorithms: [JWT_ALGORITHM] });
 
-export const issueRefreshToken = async (userId, { userAgent, ip } = {}) => {
+export const issueRefreshToken = async (userId, { userAgent, ip } = {}, familyId = crypto.randomUUID()) => {
   const token = crypto.randomBytes(48).toString('base64url');
 
   await prisma.refreshToken.create({
     data: {
       userId,
+      familyId,
       tokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
       userAgent: userAgent ? String(userAgent).slice(0, 255) : null,
@@ -48,21 +56,23 @@ export const issueRefreshToken = async (userId, { userAgent, ip } = {}) => {
     },
   });
 
-  return token;
+  return { token, familyId };
 };
 
-export const findValidRefreshToken = async (token) => {
-  if (!token) return null;
+const isToken = (token) => typeof token === 'string' && token.length > 0 && token.length <= 256;
+
+export const findRefreshToken = async (token) => {
+  if (!isToken(token)) return null;
 
   const stored = await prisma.refreshToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    select: { id: true, userId: true, expiresAt: true, revokedAt: true, rotatedAt: true },
+    select: { id: true, userId: true, familyId: true, expiresAt: true, revokedAt: true, rotatedAt: true },
   });
 
   const now = Date.now();
   if (!stored || stored.revokedAt || stored.expiresAt.getTime() < now) return null;
-  if (stored.rotatedAt && stored.rotatedAt.getTime() < now - REFRESH_REUSE_GRACE_MS) return null;
-  return stored;
+  const reused = Boolean(stored.rotatedAt) && stored.rotatedAt.getTime() < now - REFRESH_REUSE_GRACE_MS;
+  return { ...stored, reused };
 };
 
 export const markRefreshTokenRotated = (id) =>
@@ -71,20 +81,30 @@ export const markRefreshTokenRotated = (id) =>
     data: { rotatedAt: new Date() },
   });
 
-export const revokeRefreshToken = async (token) => {
-  if (!token) return;
-  const tokenHash = hashToken(token);
-  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, select: { userId: true } });
-  if (!stored) return;
-  const graceStart = new Date(Date.now() - REFRESH_REUSE_GRACE_MS);
-  await prisma.refreshToken.updateMany({
-    where: {
-      userId: stored.userId,
-      revokedAt: null,
-      OR: [{ tokenHash }, { rotatedAt: { gt: graceStart } }],
-    },
+export const revokeTokenFamily = (familyId) =>
+  prisma.refreshToken.updateMany({
+    where: { familyId, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+
+export const revokeRefreshToken = async (token) => {
+  if (!isToken(token)) return;
+  const stored = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: { familyId: true },
+  });
+  if (stored) await revokeTokenFamily(stored.familyId);
+};
+
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const isSessionActive = async (sessionId) => {
+  if (typeof sessionId !== 'string' || !SESSION_ID_PATTERN.test(sessionId)) return false;
+  const active = await prisma.refreshToken.findFirst({
+    where: { familyId: sessionId, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  return Boolean(active);
 };
 
 export const revokeAllUserTokens = (userId) =>

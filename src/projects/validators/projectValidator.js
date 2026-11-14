@@ -34,8 +34,14 @@ export const updateProjectRules = [
     .isString()
     .isLength({ max: NOTES_MAX_LENGTH })
     .withMessage('Заметка слишком длинная'),
-  body('expectedNotesVersion')
+  body('notesDoc')
     .optional()
+    .isString()
+    .withMessage('Invalid note document')
+    .custom((value, { req }) => req.body?.notes === undefined)
+    .withMessage('Send either notes or notesDoc'),
+  body('expectedNotesVersion')
+    .if((value, { req }) => value !== undefined || req.body?.notesDoc !== undefined)
     .isInt({ min: 0 })
     .withMessage('Invalid notes version')
     .toInt(),
