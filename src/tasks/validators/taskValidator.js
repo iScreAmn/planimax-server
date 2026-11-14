@@ -30,6 +30,8 @@ export const summaryRules = dateRangeRules(SUMMARY_MAX_DAYS);
 
 export const clientIdRule = (message) => body('id').optional().isUUID().withMessage(message);
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const titleRule = () =>
   body('title')
     .isString()
@@ -66,7 +68,7 @@ const changedAtRule = () =>
 
 const sharedRules = () => [
   changedAtRule(),
-  nullable('projectId', (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v), 'Invalid project'),
+  nullable('projectId', (v) => typeof v === 'string' && UUID_PATTERN.test(v), 'Invalid project'),
   nullable('date', isValidDateKey, 'Date must be YYYY-MM-DD'),
   nullable('time', isValidTime, 'Time must be HH:MM'),
   body('priority').optional().isIn(TASK_PRIORITIES).withMessage('Invalid priority'),

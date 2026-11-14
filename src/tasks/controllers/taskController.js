@@ -27,8 +27,10 @@ const handleError = (res, label, error, message) => {
   return res.status(500).json({ success: false, message });
 };
 
-const parseChangedAt = (value) =>
-  typeof value === 'string' ? new Date(Math.min(Date.parse(value), Date.now())) : undefined;
+const parseChangedAt = (value) => {
+  const timestamp = typeof value === 'string' ? Date.parse(value) : NaN;
+  return Number.isFinite(timestamp) ? new Date(Math.min(timestamp, Date.now())) : undefined;
+};
 
 const pickInput = (body) => ({
   changedAt: parseChangedAt(body.changedAt),
