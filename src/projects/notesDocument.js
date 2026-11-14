@@ -68,7 +68,7 @@ const align = optional(oneOf(TEXT_ALIGNS));
 const isLinkHref = (value) =>
   typeof value === 'string' && value.length <= LINK_HREF_MAX_LENGTH && /^https?:\/\/[^\s]+$/i.test(value) && URL.canParse(value);
 
-const BLOCKS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'taskList', 'details'];
+const BLOCKS = ['paragraph', 'heading', 'horizontalRule', 'bulletList', 'orderedList', 'taskList', 'details'];
 const INLINE = ['text', 'hardBreak'];
 const RICH_INLINE = [...INLINE, 'linkMention'];
 const shortText = (max) => optional((value) => typeof value === 'string' && value.length > 0 && value.length <= max);
@@ -92,6 +92,7 @@ const NODES = {
   detailsSummary: { content: { rest: INLINE } },
   detailsContent: { content: { rest: BLOCKS, min: 1 } },
   hardBreak: {},
+  horizontalRule: {},
   linkMention: {
     attrs: {
       href: isLinkHref,
@@ -107,6 +108,7 @@ const NODES = {
 
 const MARKS = {
   bold: {},
+  code: {},
   link: { attrs: { href: isLinkHref } },
   italic: {},
   strike: {},

@@ -21,7 +21,7 @@ const fullDoc = doc(
     type: 'paragraph',
     attrs: { textAlign: 'right' },
     content: [
-      text('Bold', [{ type: 'bold' }]),
+      text('Bold', [{ type: 'bold' }, { type: 'code' }]),
       text(' and ', [{ type: 'link', attrs: { href: 'https://example.com/a?b=1' } }]),
       text('red', [{ type: 'italic' }, { type: 'textColor', attrs: { color: 'red' } }]),
       { type: 'hardBreak' },
@@ -29,6 +29,7 @@ const fullDoc = doc(
     ],
   },
   paragraph(),
+  { type: 'horizontalRule' },
   {
     type: 'bulletList',
     content: [
@@ -119,6 +120,9 @@ test('rejects unknown nodes, fields and attributes', () => {
   expectError(doc(paragraph(text(''))));
   expectError(doc(paragraph({ type: 'text', text: 'a', attrs: {} })));
   expectError(doc(paragraph({ type: 'hardBreak', content: [] })));
+  expectError(doc({ type: 'horizontalRule', content: [paragraph()] }));
+  expectError(doc({ type: 'horizontalRule', attrs: { style: 'x' } }));
+  expectError(doc(paragraph({ type: 'horizontalRule' })));
   expectError(doc(paragraph({ type: 'linkMention' })));
   expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'javascript:alert(1)' } })));
   expectError(doc(paragraph({ type: 'linkMention', attrs: { href: 'https://example.com', image: 'data:image/png;base64,AA' } })));
@@ -153,6 +157,7 @@ test('rejects marks outside the allowed set', () => {
   expectError(doc(paragraph(text('x', [{ type: 'textColor', attrs: { color: 'red;background:url(x)' } }]))));
   expectError(doc(paragraph(text('x', [{ type: 'textColor' }]))));
   expectError(doc(paragraph(text('x', [{ type: 'bold' }, { type: 'bold' }]))));
+  expectError(doc(paragraph(text('x', [{ type: 'code', attrs: { language: 'js' } }]))));
   expectError(doc(paragraph(text('x', [{ type: 'bold', attrs: { weight: 900 } }]))));
 });
 
