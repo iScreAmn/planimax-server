@@ -17,7 +17,7 @@ export const toPublicProject = (project) => ({
 });
 
 export const listProjects = async (userId) =>
-  (await prisma.project.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } })).map(
+  (await prisma.project.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } })).map(
     toPublicProject,
   );
 
