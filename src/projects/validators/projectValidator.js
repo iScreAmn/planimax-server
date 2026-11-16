@@ -57,4 +57,5 @@ export const updateProjectRules = [
     })
     .withMessage('A valid note version is required to save it'),
   body('inPlanner').optional().isBoolean({ strict: true }),
+  body('pinned').optional().isBoolean({ strict: true }),
 ];

@@ -68,6 +68,7 @@ model Project {
   notesDoc     String?  @map("notes_doc")
   notesVersion Int      @default(0) @map("notes_version")
   inPlanner    Boolean  @default(false) @map("in_planner")
+  pinned       Boolean  @default(false)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

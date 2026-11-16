@@ -12,6 +12,7 @@ export const toPublicProject = (project) => ({
   notesDoc: project.notesDoc,
   notesVersion: project.notesVersion,
   inPlanner: project.inPlanner,
+  pinned: project.pinned,
   createdAt: project.createdAt,
   updatedAt: project.updatedAt,
 });
@@ -60,6 +61,7 @@ export const updateProject = (userId, id, input) =>
     if (input.name !== undefined) data.name = input.name;
     if (input.color !== undefined) data.color = input.color;
     if (input.inPlanner !== undefined) data.inPlanner = input.inPlanner;
+    if (input.pinned !== undefined) data.pinned = input.pinned;
 
     const notesUpdate = resolveNotesUpdate(existing, input);
     if (notesUpdate) {
@@ -69,6 +71,7 @@ export const updateProject = (userId, id, input) =>
     }
 
     if (Object.keys(data).length === 0) return toPublicProject(existing);
+    if (Object.keys(data).every((key) => key === 'pinned')) data.updatedAt = existing.updatedAt;
 
     const where = notesUpdate ? { id, ...notesUpdate.where } : { id };
     try {

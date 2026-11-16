@@ -67,7 +67,7 @@ export const patchProject = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return badRequest(res, errors);
 
-  const { name, color, notes, notesDoc, inPlanner, expectedUpdatedAt, expectedNotesVersion } = req.body;
+  const { name, color, notes, notesDoc, inPlanner, pinned, expectedUpdatedAt, expectedNotesVersion } = req.body;
   try {
     const project = await updateProject(req.user.id, req.params.id, {
       name: typeof name === 'string' ? name.trim() : undefined,
@@ -75,6 +75,7 @@ export const patchProject = async (req, res) => {
       notes,
       notesDoc,
       inPlanner,
+      pinned,
       expectedUpdatedAt,
       expectedNotesVersion,
     });
