@@ -68,7 +68,7 @@ const changedAtRule = () =>
 
 const sharedRules = () => [
   changedAtRule(),
-  nullable('projectId', (v) => typeof v === 'string' && UUID_PATTERN.test(v), 'Invalid project'),
+  nullable('projectId', (v) => typeof v === 'string' && UUID_PATTERN.test(v), 'Invalid note'),
   nullable('date', isValidDateKey, 'Date must be YYYY-MM-DD'),
   nullable('time', isValidTime, 'Time must be HH:MM'),
   body('priority').optional().isIn(TASK_PRIORITIES).withMessage('Invalid priority'),

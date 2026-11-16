@@ -55,6 +55,6 @@ export const updateProjectRules = [
       const version = new Date(value);
       return Number.isFinite(version.getTime()) && version.toISOString() === value;
     })
-    .withMessage('A valid project version is required to save notes'),
+    .withMessage('A valid note version is required to save it'),
   body('inPlanner').optional().isBoolean({ strict: true }),
 ];

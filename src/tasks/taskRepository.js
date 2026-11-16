@@ -65,8 +65,8 @@ const nextPosition = async (tx, userId, date, priority) => {
 
 const assertProject = async (tx, userId, projectId) => {
   const project = await tx.project.findFirst({ where: { id: projectId, userId } });
-  if (!project) throw new TaskError(400, 'Project not found');
-  if (!project.inPlanner) throw new TaskError(400, 'Project is not added to Planner');
+  if (!project) throw new TaskError(400, 'Note not found');
+  if (!project.inPlanner) throw new TaskError(400, 'Note is not added to Planner');
 };
 
 const clearedReminder = {

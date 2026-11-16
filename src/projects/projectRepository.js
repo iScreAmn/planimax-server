@@ -29,7 +29,7 @@ export const findProject = async (userId, id) => {
 const findOwnedProject = async (userId, id) => {
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return null;
-  if (project.userId !== userId) throw new ProjectError(409, 'This project id is already taken');
+  if (project.userId !== userId) throw new ProjectError(409, 'This note id is already taken');
   return toPublicProject(project);
 };
 

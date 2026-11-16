@@ -15,7 +15,7 @@ const badRequest = (res, errors) =>
     errors: errors.array().map((e) => ({ path: e.path || e.param, msg: e.msg })),
   });
 
-const notFound = (res) => res.status(404).json({ success: false, message: 'Project not found' });
+const notFound = (res) => res.status(404).json({ success: false, message: 'Note not found' });
 
 const serverError = (res, label, error, message) => {
   if (error instanceof ProjectError) {
@@ -29,7 +29,7 @@ export const getProjects = async (req, res) => {
   try {
     return res.json({ success: true, data: await listProjects(req.user.id) });
   } catch (error) {
-    return serverError(res, 'не удалось получить список', error, 'Failed to load projects');
+    return serverError(res, 'не удалось получить список', error, 'Failed to load notes');
   }
 };
 
@@ -42,7 +42,7 @@ export const getProject = async (req, res) => {
     if (!project) return notFound(res);
     return res.json({ success: true, data: project });
   } catch (error) {
-    return serverError(res, 'не удалось получить проект', error, 'Failed to load project');
+    return serverError(res, 'не удалось получить проект', error, 'Failed to load note');
   }
 };
 
@@ -59,7 +59,7 @@ export const postProject = async (req, res) => {
     });
     return res.status(created ? 201 : 200).json({ success: true, data: project });
   } catch (error) {
-    return serverError(res, 'не удалось создать проект', error, 'Failed to create project');
+    return serverError(res, 'не удалось создать проект', error, 'Failed to create note');
   }
 };
 
@@ -81,7 +81,7 @@ export const patchProject = async (req, res) => {
     if (!project) return notFound(res);
     return res.json({ success: true, data: project });
   } catch (error) {
-    return serverError(res, 'не удалось обновить проект', error, 'Failed to update project');
+    return serverError(res, 'не удалось обновить проект', error, 'Failed to update note');
   }
 };
 
@@ -93,6 +93,6 @@ export const removeProject = async (req, res) => {
     const deleted = await deleteProject(req.user.id, req.params.id);
     return res.json({ success: true, data: { id: req.params.id, deleted } });
   } catch (error) {
-    return serverError(res, 'не удалось удалить проект', error, 'Failed to delete project');
+    return serverError(res, 'не удалось удалить проект', error, 'Failed to delete note');
   }
 };

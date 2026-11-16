@@ -2,7 +2,7 @@ import { parseNotesDoc } from './notesDocument.js';
 import { ProjectError } from './projectError.js';
 
 export const notesConflict = () =>
-  new ProjectError(409, 'Project notes changed since this version', 'PROJECT_NOTES_CONFLICT');
+  new ProjectError(409, 'Note changed since this version', 'PROJECT_NOTES_CONFLICT');
 
 const outdatedClient = () =>
   new ProjectError(409, 'This note uses a newer format. Please update the app.', 'PROJECT_NOTES_CLIENT_OUTDATED');
