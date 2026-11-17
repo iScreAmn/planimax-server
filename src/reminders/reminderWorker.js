@@ -106,7 +106,7 @@ const deliver = async (config, task, now) => {
 export const processDueReminders = async (config = getTelegramConfig(), now = new Date()) => {
   await releaseStaleClaims(now);
   const due = await prisma.task.findMany({
-    where: { reminderStatus: 'scheduled', reminderNextAttemptAt: { lte: now }, status: 'todo' },
+    where: { reminderStatus: 'scheduled', reminderNextAttemptAt: { lte: now }, status: 'todo', deletedAt: null, archivedAt: null },
     include: { project: { select: { name: true } } },
     orderBy: { reminderNextAttemptAt: 'asc' },
     take: BATCH_SIZE,

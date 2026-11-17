@@ -18,12 +18,12 @@ export const toPublicProject = (project) => ({
 });
 
 export const listProjects = async (userId) =>
-  (await prisma.project.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } })).map(
+  (await prisma.project.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: 'desc' } })).map(
     toPublicProject,
   );
 
 export const findProject = async (userId, id) => {
-  const project = await prisma.project.findFirst({ where: { id, userId } });
+  const project = await prisma.project.findFirst({ where: { id, userId, deletedAt: null } });
   return project ? toPublicProject(project) : null;
 };
 
@@ -54,7 +54,7 @@ export const createProject = async (userId, { id, name, color, inPlanner }) => {
 
 export const updateProject = (userId, id, input) =>
   prisma.$transaction(async (tx) => {
-    const existing = await tx.project.findFirst({ where: { id, userId } });
+    const existing = await tx.project.findFirst({ where: { id, userId, deletedAt: null } });
     if (!existing) return null;
 
     const data = {};
@@ -78,13 +78,27 @@ export const updateProject = (userId, id, input) =>
       return toPublicProject(await tx.project.update({ where, data }));
     } catch (error) {
       if (error?.code !== 'P2025') throw error;
-      const stillExists = await tx.project.count({ where: { id, userId } });
+      const stillExists = await tx.project.count({ where: { id, userId, deletedAt: null } });
       if (notesUpdate && stillExists) throw notesConflict();
       return null;
     }
   });
 
-export const deleteProject = async (userId, id) => {
-  const { count } = await prisma.project.deleteMany({ where: { id, userId } });
+export const deleteProject = async (userId, id, now = new Date()) => {
+  const existing = await prisma.project.findFirst({ where: { id, userId, deletedAt: null } });
+  if (!existing) return false;
+  const { count } = await prisma.project.updateMany({
+    where: { id, deletedAt: null },
+    data: { deletedAt: now, updatedAt: existing.updatedAt },
+  });
   return count > 0;
+};
+
+export const restoreProject = async (userId, id) => {
+  const existing = await prisma.project.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  if (!existing.deletedAt) return toPublicProject(existing);
+  return toPublicProject(
+    await prisma.project.update({ where: { id }, data: { deletedAt: null, updatedAt: existing.updatedAt } }),
+  );
 };

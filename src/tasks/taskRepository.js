@@ -14,7 +14,12 @@ export class TaskError extends Error {
   }
 }
 
-const projectSelect = { select: { id: true, name: true, color: true, inPlanner: true } };
+const projectSelect = { select: { id: true, name: true, color: true, inPlanner: true, deletedAt: true } };
+
+const toPublicProject = (project) =>
+  project && !project.deletedAt
+    ? { id: project.id, name: project.name, color: project.color, inPlanner: project.inPlanner }
+    : null;
 
 const toPublicReminder = (task) => {
   if (!task.reminderAt) return null;
@@ -36,7 +41,7 @@ export const toPublicTask = (task) => ({
   id: task.id,
   title: task.title,
   projectId: task.projectId,
-  project: task.project ?? null,
+  project: toPublicProject(task.project),
   date: dbToDateKey(task.date),
   time: task.time,
   priority: task.priority,
@@ -47,10 +52,14 @@ export const toPublicTask = (task) => ({
   createdAt: task.createdAt,
   updatedAt: task.updatedAt,
   reminder: toPublicReminder(task),
+  archivedAt: task.archivedAt ?? null,
+  archiveReason: task.archiveReason ?? null,
 });
 
 const groupWhere = (userId, date, priority) => ({
   userId,
+  deletedAt: null,
+  archivedAt: null,
   date: dateKeyToDb(date),
   priority: priority === 'high' ? 'high' : { in: ['low', 'normal'] },
 });
@@ -64,7 +73,7 @@ const nextPosition = async (tx, userId, date, priority) => {
 };
 
 const assertProject = async (tx, userId, projectId) => {
-  const project = await tx.project.findFirst({ where: { id: projectId, userId } });
+  const project = await tx.project.findFirst({ where: { id: projectId, userId, deletedAt: null } });
   if (!project) throw new TaskError(400, 'Note not found');
   if (!project.inPlanner) throw new TaskError(400, 'Note is not added to Planner');
 };
@@ -147,6 +156,8 @@ export const listTasksForDay = async (userId, date) => {
   const tasks = await prisma.task.findMany({
     where: {
       userId,
+      deletedAt: null,
+      archivedAt: null,
       OR: [
         { date: dateKeyToDb(date) },
         { date: null, status: 'todo' },
@@ -163,7 +174,7 @@ export const listTasksForDay = async (userId, date) => {
 export const summarizeTasks = async (userId, from, to) => {
   const groups = await prisma.task.groupBy({
     by: ['date', 'status'],
-    where: { userId, date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
+    where: { userId, deletedAt: null, date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
     _count: { _all: true },
   });
 
@@ -179,7 +190,7 @@ export const summarizeTasks = async (userId, from, to) => {
 };
 
 export const findTask = async (userId, id) => {
-  const task = await prisma.task.findFirst({ where: { id, userId }, include: { project: projectSelect } });
+  const task = await prisma.task.findFirst({ where: { id, userId, deletedAt: null, archivedAt: null }, include: { project: projectSelect } });
   return task ? toPublicTask(task) : null;
 };
 
@@ -235,7 +246,7 @@ const insertTask = (userId, input, now) =>
 
 export const updateTask = (userId, id, input, now = new Date()) =>
   prisma.$transaction(async (tx) => {
-    const existing = await tx.task.findFirst({ where: { id, userId } });
+    const existing = await tx.task.findFirst({ where: { id, userId, deletedAt: null, archivedAt: null } });
     if (!existing) return null;
 
     const data = {};
@@ -268,7 +279,7 @@ export const updateTask = (userId, id, input, now = new Date()) =>
     }
     if (isCurrent !== existing.isCurrent) data.isCurrent = isCurrent;
     if (isCurrent && !existing.isCurrent) {
-      await tx.task.updateMany({ where: { userId, isCurrent: true }, data: { isCurrent: false } });
+      await tx.task.updateMany({ where: { userId, isCurrent: true, deletedAt: null }, data: { isCurrent: false } });
     }
 
     Object.assign(data, reminderChanges(existing, input.reminder, now, input.changedAt) ?? {});
@@ -278,14 +289,77 @@ export const updateTask = (userId, id, input, now = new Date()) =>
     return toPublicTask(task);
   });
 
-export const deleteTask = async (userId, id) => {
-  const { count } = await prisma.task.deleteMany({ where: { id, userId } });
+export const deleteTask = async (userId, id, now = new Date()) => {
+  const { count } = await prisma.task.updateMany({
+    where: { id, userId, deletedAt: null },
+    data: { deletedAt: now, isCurrent: false },
+  });
   return count > 0;
 };
 
+const MISSED_IN_TRASH_ERROR = 'The reminder time passed while the task was in Trash';
+const MISSED_IN_ARCHIVE_ERROR = 'The reminder time passed while the task was in Archive';
+
+const missedReminder = (task, now, message) =>
+  task.reminderStatus === 'scheduled' && task.reminderAt && task.reminderAt <= now
+    ? { reminderStatus: 'failed', reminderNextAttemptAt: null, reminderClaimedAt: null, reminderLastError: message }
+    : {};
+
+const findArchived = (tx, userId, id) =>
+  tx.task.findFirst({ where: { id, userId, deletedAt: null, archivedAt: { not: null } } });
+
+export const planArchivedForToday = (userId, id, today, now = new Date()) =>
+  prisma.$transaction(async (tx) => {
+    const existing = await findArchived(tx, userId, id);
+    if (!existing) return null;
+    const data = {
+      archivedAt: null,
+      archiveReason: null,
+      date: dateKeyToDb(today),
+      status: 'todo',
+      completedAt: null,
+      position: await nextPosition(tx, userId, today, existing.priority),
+      ...missedReminder(existing, now, MISSED_IN_ARCHIVE_ERROR),
+    };
+    applyStatusRules({ ...existing, ...data }, data, now);
+    const task = await tx.task.update({ where: { id }, data, include: { project: projectSelect } });
+    return toPublicTask(task);
+  });
+
+export const completeArchived = (userId, id, now = new Date()) =>
+  prisma.$transaction(async (tx) => {
+    const existing = await findArchived(tx, userId, id);
+    if (!existing) return null;
+    const data = { status: 'done', archiveReason: 'completed', completedAt: existing.completedAt ?? now };
+    applyStatusRules({ ...existing, ...data }, data, now);
+    const task = await tx.task.update({ where: { id }, data, include: { project: projectSelect } });
+    return toPublicTask(task);
+  });
+
+export const restoreTask = (userId, id, now = new Date()) =>
+  prisma.$transaction(async (tx) => {
+    const existing = await tx.task.findFirst({ where: { id, userId } });
+    if (!existing) return null;
+    if (!existing.deletedAt) {
+      return toPublicTask(await tx.task.findUnique({ where: { id }, include: { project: projectSelect } }));
+    }
+    const date = dbToDateKey(existing.date);
+    const data = { deletedAt: null, position: await nextPosition(tx, userId, date, existing.priority) };
+    if (existing.reminderStatus === 'scheduled' && existing.reminderAt && existing.reminderAt <= now) {
+      Object.assign(data, {
+        reminderStatus: 'failed',
+        reminderNextAttemptAt: null,
+        reminderClaimedAt: null,
+        reminderLastError: MISSED_IN_TRASH_ERROR,
+      });
+    }
+    const task = await tx.task.update({ where: { id }, data, include: { project: projectSelect } });
+    return toPublicTask(task);
+  });
+
 export const reorderTasks = (userId, ids) =>
   prisma.$transaction(async (tx) => {
-    const owned = await tx.task.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
+    const owned = await tx.task.findMany({ where: { userId, deletedAt: null, archivedAt: null, id: { in: ids } }, select: { id: true } });
     const ownedIds = new Set(owned.map((task) => task.id));
     const order = ids
       .map((id, position) => ({ id, position }))
@@ -304,6 +378,8 @@ export const listTasksForSnapshot = async (userId, from, to) => {
   const tasks = await prisma.task.findMany({
     where: {
       userId,
+      deletedAt: null,
+      archivedAt: null,
       OR: [
         { status: 'todo' },
         { date: { gte: fromDb, lte: toDb } },

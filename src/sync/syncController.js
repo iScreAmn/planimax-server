@@ -1,6 +1,8 @@
 import { validationResult } from 'express-validator';
 import { listProjects } from '../projects/projectRepository.js';
 import { listTasksForSnapshot } from '../tasks/taskRepository.js';
+import { prisma } from '../config/prisma.js';
+import { isValidTimeZone } from '../tasks/timezone.js';
 
 export const getSnapshot = async (req, res) => {
   const errors = validationResult(req);
@@ -12,8 +14,11 @@ export const getSnapshot = async (req, res) => {
     });
   }
 
-  const { from, to } = req.query;
+  const { from, to, timezone } = req.query;
   try {
+    if (isValidTimeZone(timezone)) {
+      await prisma.user.updateMany({ where: { id: req.user.id, NOT: { timezone } }, data: { timezone } });
+    }
     const serverTime = new Date().toISOString();
     const [projects, tasks] = await Promise.all([
       listProjects(req.user.id),

@@ -31,6 +31,12 @@ model User {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
+  timezone           String  @default("UTC") @db.VarChar(64)
+  trashRetentionDays Int?    @default(30) @map("trash_retention_days")
+  archiveCompleted   Boolean @default(true) @map("archive_completed")
+  archiveOverdue     Boolean @default(true) @map("archive_overdue")
+  archivePurgeDays   Int?    @map("archive_purge_days")
+
   refreshTokens RefreshToken[]
   projects      Project[]
   tasks         Task[]
@@ -60,22 +66,24 @@ model RefreshToken {
 }
 
 model Project {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String?  @map("user_id") @db.Uuid
-  name         String   @db.VarChar(30)
-  color        String   @db.VarChar(7)
-  notes        String   @default("")
-  notesDoc     String?  @map("notes_doc")
-  notesVersion Int      @default(0) @map("notes_version")
-  inPlanner    Boolean  @default(false) @map("in_planner")
-  pinned       Boolean  @default(false)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  name         String    @db.VarChar(30)
+  color        String    @db.VarChar(7)
+  notes        String    @default("")
+  notesDoc     String?   @map("notes_doc")
+  notesVersion Int       @default(0) @map("notes_version")
+  inPlanner    Boolean   @default(false) @map("in_planner")
+  pinned       Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
 
   user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks Task[]
 
   @@index([userId])
+  @@index([deletedAt])
   @@map("projects")
 }
 
@@ -90,6 +98,11 @@ enum TaskPriority {
   high
 }
 
+enum ArchiveReason {
+  completed
+  overdue
+}
+
 enum ReminderStatus {
   scheduled
   sending
@@ -99,19 +112,22 @@ enum ReminderStatus {
 }
 
 model Task {
-  id          String       @id @default(uuid()) @db.Uuid
-  userId      String       @map("user_id") @db.Uuid
-  projectId   String?      @map("project_id") @db.Uuid
-  title       String       @db.VarChar(200)
-  date        DateTime?    @db.Date
-  time        String?      @db.VarChar(5)
-  priority    TaskPriority @default(normal)
-  status      TaskStatus   @default(todo)
-  position    Int          @default(0)
-  isCurrent   Boolean      @default(false) @map("is_current")
-  completedAt DateTime?    @map("completed_at")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  projectId     String?        @map("project_id") @db.Uuid
+  title         String         @db.VarChar(200)
+  date          DateTime?      @db.Date
+  time          String?        @db.VarChar(5)
+  priority      TaskPriority   @default(normal)
+  status        TaskStatus     @default(todo)
+  position      Int            @default(0)
+  isCurrent     Boolean        @default(false) @map("is_current")
+  completedAt   DateTime?      @map("completed_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  deletedAt     DateTime?      @map("deleted_at")
+  archivedAt    DateTime?      @map("archived_at")
+  archiveReason ArchiveReason? @map("archive_reason")
 
   reminderAt            DateTime?       @map("reminder_at")
   reminderTimezone      String?         @map("reminder_timezone") @db.VarChar(64)
@@ -128,5 +144,7 @@ model Task {
   @@index([userId, date])
   @@index([projectId])
   @@index([reminderStatus, reminderNextAttemptAt])
+  @@index([deletedAt])
+  @@index([userId, archivedAt])
   @@map("tasks")
 }
