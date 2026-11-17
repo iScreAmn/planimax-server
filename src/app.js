@@ -10,6 +10,9 @@ import userRoutes from './users/routes/userRoutes.js';
 import taskRoutes from './tasks/routes/taskRoutes.js';
 import syncRoutes from './sync/syncRoutes.js';
 import linkRoutes from './links/linkRoutes.js';
+import trashRoutes from './trash/trashRoutes.js';
+import archiveRoutes from './archive/archiveRoutes.js';
+import settingsRoutes from './settings/settingsRoutes.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -56,6 +59,9 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/links', linkRoutes);
+app.use('/api/trash', trashRoutes);
+app.use('/api/archive', archiveRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

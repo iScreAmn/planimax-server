@@ -2,6 +2,8 @@ import 'dotenv/config';
 import app from './src/app.js';
 import { disconnectDB } from './src/config/prisma.js';
 import { startReminderWorker } from './src/reminders/reminderWorker.js';
+import { startTrashWorker } from './src/trash/trashWorker.js';
+import { startArchiveWorker } from './src/archive/archiveWorker.js';
 import { deleteExpiredTokens } from './src/auth/services/tokenService.js';
 
 const PORT = Number(process.env.PORT || 5055);
@@ -24,6 +26,8 @@ if (jwtSecret && jwtSecret.length < 32) {
 }
 
 let stopReminderWorker = () => {};
+let stopTrashWorker = () => {};
+let stopArchiveWorker = () => {};
 
 const server = app.listen(PORT, () => {
   console.log(`Planimax API running on port ${PORT}`);
@@ -33,11 +37,15 @@ const server = app.listen(PORT, () => {
   cleanupTokens();
   setInterval(cleanupTokens, TOKEN_CLEANUP_INTERVAL_MS).unref();
   stopReminderWorker = startReminderWorker();
+  stopTrashWorker = startTrashWorker();
+  stopArchiveWorker = startArchiveWorker();
 });
 
 const shutdown = (signal) => () => {
   console.log(`${signal} received, shutting down`);
   stopReminderWorker();
+  stopTrashWorker();
+  stopArchiveWorker();
   server.close(async () => {
     await disconnectDB();
     process.exit(0);
